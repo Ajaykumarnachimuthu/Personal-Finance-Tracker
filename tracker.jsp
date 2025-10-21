@@ -66,7 +66,7 @@
     String errorMessage = null;
     String userId = loggedInUserId;
 
-    // MongoDB connection
+    // MongoDB connection - MINIMAL CHANGES
     MongoClient mongoClient = null;
     MongoDatabase database = null;
     MongoCollection<Document> usersCollection = null;
@@ -74,17 +74,28 @@
     MongoCollection<Document> expensesCollection = null;
     MongoCollection<Document> incomesCollection = null;
     
-    Properties props = new Properties();
     String connectionString = "mongodb://localhost:27017/finance_tracker";
     boolean dbConnected = false;
-    
-    try {
-        props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
-        connectionString = props.getProperty("mongodb.uri", connectionString);
-    } catch (Exception e) {
-        out.println("<!-- Config load error: " + e.getMessage() + " -->");
-        errorMessage = "Configuration error: " + e.getMessage();
+
+    // === ONLY THIS PART CHANGED ===
+    // First, try environment variable (for Render)
+    String envMongoUri = System.getenv("MONGODB_URI");
+    if (envMongoUri != null && !envMongoUri.trim().isEmpty()) {
+        connectionString = envMongoUri;
+        out.println("<!-- Using MONGODB_URI from environment -->");
+    } else {
+        // Fallback to config.properties (for local development)
+        try {
+            Properties props = new Properties();
+            props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
+            connectionString = props.getProperty("mongodb.uri", connectionString);
+            out.println("<!-- Using config.properties -->");
+        } catch (Exception e) {
+            out.println("<!-- Config load error: " + e.getMessage() + " -->");
+            errorMessage = "Configuration error: " + e.getMessage();
+        }
     }
+    // === END OF CHANGES ===
 
     try {
         MongoClientSettings settings = MongoClientSettings.builder()
