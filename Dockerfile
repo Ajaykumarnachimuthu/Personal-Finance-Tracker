@@ -1,10 +1,4 @@
 FROM tomcat:9-jdk17-openjdk
-
-# Copy your WAR file to Tomcat
-COPY ./app.war /usr/local/tomcat/webapps/ROOT.war
-
-# Expose port
+COPY . /usr/local/tomcat/webapps/ROOT/
 EXPOSE 8080
-
-# Start Tomcat
 CMD ["catalina.sh", "run"]
