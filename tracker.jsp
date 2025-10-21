@@ -64,7 +64,6 @@
     List<Document> categories = new ArrayList<>();
     Map<String, List<Document>> expensesByCategory = new HashMap<>();
     String errorMessage = null;
-    String successMessage = null;
     String userId = loggedInUserId;
 
     // MongoDB connection
@@ -262,73 +261,76 @@
         }
     }
 
-    // Handle form actions
-    String action = request.getParameter("action");
-    if (action != null) {
-        // Debug info
-        out.println("<!-- Form Action: " + action + " -->");
-        out.println("<!-- dbConnected: " + dbConnected + " -->");
-        out.println("<!-- userId: " + userId + " -->");
-        
-        if (dbConnected && mongoClient != null && userId != null) {
-            try {
-                ObjectId userObjectId = new ObjectId(userId);
-                
-                // CSRF token validation
-                String sessionToken = (String) session.getAttribute("csrfToken");
-                String requestToken = request.getParameter("csrfToken");
-                
-                if (sessionToken == null) {
-                    sessionToken = java.util.UUID.randomUUID().toString();
-                    session.setAttribute("csrfToken", sessionToken);
-                }
-                
-                if (requestToken == null || !sessionToken.equals(requestToken)) {
-                    errorMessage = "Security validation failed. Please try again.";
-                } else if ("addIncome".equals(action)) {
-                    String amountStr = request.getParameter("incomeAmount");
-                    if (isValidString(amountStr)) {
-                        try {
-                            double amount = parseSafeDouble(amountStr);
-                            Document income = new Document()
-                                .append("user_id", userObjectId)
-                                .append("amount", amount)
-                                .append("income_date", new java.util.Date())
-                                .append("created_at", new java.util.Date());
-                            incomesCollection.insertOne(income);
-                            successMessage = "Income added successfully!";
-                            response.sendRedirect("tracker.jsp");
-                            return;
-                        } catch (NumberFormatException e) {
-                            errorMessage = "Invalid amount format. Please enter a valid number.";
-                        }
-                    } else {
-                        errorMessage = "Please enter an income amount.";
+    // Handle form actions - NO REDIRECTS, NO SUCCESS MESSAGES
+    // Handle form actions - WITH REDIRECTS to prevent duplicate submissions
+String action = request.getParameter("action");
+if (action != null) {
+    if (dbConnected && mongoClient != null && userId != null) {
+        try {
+            ObjectId userObjectId = new ObjectId(userId);
+            
+            // CSRF token validation
+            String sessionToken = (String) session.getAttribute("csrfToken");
+            String requestToken = request.getParameter("csrfToken");
+            
+            if (sessionToken == null) {
+                sessionToken = java.util.UUID.randomUUID().toString();
+                session.setAttribute("csrfToken", sessionToken);
+            }
+            
+            if (requestToken == null || !sessionToken.equals(requestToken)) {
+                errorMessage = "Security validation failed. Please try again.";
+            } else if ("addIncome".equals(action)) {
+                String amountStr = request.getParameter("incomeAmount");
+                if (isValidString(amountStr)) {
+                    try {
+                        double amount = parseSafeDouble(amountStr);
+                        Document income = new Document()
+                            .append("user_id", userObjectId)
+                            .append("amount", amount)
+                            .append("income_date", new java.util.Date())
+                            .append("created_at", new java.util.Date());
+                        incomesCollection.insertOne(income);
+                        // REDIRECT to prevent duplicate submissions
+                        response.sendRedirect("tracker.jsp");
+                        return;
+                    } catch (NumberFormatException e) {
+                        errorMessage = "Invalid amount format. Please enter a valid number.";
                     }
+                } else {
+                    errorMessage = "Please enter an income amount.";
                 }
-                else if ("setGlobalLimit".equals(action)) {
-                    String limitStr = request.getParameter("globalLimit");
-                    if (isValidString(limitStr)) {
-                        try {
-                            double newLimit = parseSafeDouble(limitStr);
-                            usersCollection.updateOne(
-                                eq("_id", userObjectId),
-                                set("global_limit", newLimit)
-                            );
-                            successMessage = "Global limit updated successfully!";
-                            response.sendRedirect("tracker.jsp");
-                            return;
-                        } catch (NumberFormatException e) {
-                            errorMessage = "Invalid limit amount. Please enter a valid number.";
-                        }
-                    } else {
-                        errorMessage = "Please enter a global limit amount.";
+            }
+            else if ("setGlobalLimit".equals(action)) {
+                String limitStr = request.getParameter("globalLimit");
+                if (isValidString(limitStr)) {
+                    try {
+                        double newLimit = parseSafeDouble(limitStr);
+                        usersCollection.updateOne(
+                            eq("_id", userObjectId),
+                            set("global_limit", newLimit)
+                        );
+                        // REDIRECT to prevent duplicate submissions
+                        response.sendRedirect("tracker.jsp");
+                        return;
+                    } catch (NumberFormatException e) {
+                        errorMessage = "Invalid limit amount. Please enter a valid number.";
                     }
+                } else {
+                    errorMessage = "Please enter a global limit amount.";
                 }
-                else if ("addCategory".equals(action)) {
-                    String catName = request.getParameter("newCategory");
-                    out.println("<!-- Adding category: " + catName + " -->");
-                    if (isValidCategoryName(catName)) {
+            }
+            else if ("addCategory".equals(action)) {
+                String catName = request.getParameter("newCategory");
+                if (isValidCategoryName(catName)) {
+                    // Check if category already exists for this user
+                    Document existingCategory = categoriesCollection.find(
+                        and(eq("user_id", userObjectId), eq("name", catName.trim()))
+                    ).first();
+                    
+                    if (existingCategory != null) {
+                        errorMessage = "Category '" + catName + "' already exists.";
+                    } else {
                         String[] colors = {"#60A5FA", "#34D399", "#FBBF24", "#F87171", "#A78BFA", "#38BDF8", "#A3E635", "#FB923C"};
                         Document category = new Document()
                             .append("user_id", userObjectId)
@@ -337,111 +339,111 @@
                             .append("limit_amount", 0.0)
                             .append("created_at", new java.util.Date());
                         categoriesCollection.insertOne(category);
-                        successMessage = "Category '" + catName + "' added successfully!";
+                        // REDIRECT to prevent duplicate submissions
                         response.sendRedirect("tracker.jsp");
                         return;
-                    } else {
-                        errorMessage = "Category name must be 2-50 characters long and contain only letters, numbers, spaces, hyphens, and ampersands.";
                     }
+                } else {
+                    errorMessage = "Category name must be 2-50 characters long and contain only letters, numbers, spaces, hyphens, and ampersands.";
                 }
-                else if ("deleteCategory".equals(action)) {
-                    String catIdStr = request.getParameter("categoryId");
-                    if (isValidObjectId(catIdStr)) {
+            }
+            else if ("deleteCategory".equals(action)) {
+                String catIdStr = request.getParameter("categoryId");
+                if (isValidObjectId(catIdStr)) {
+                    ObjectId catId = new ObjectId(catIdStr);
+                    expensesCollection.deleteMany(eq("category_id", catId));
+                    categoriesCollection.deleteOne(
+                        and(eq("_id", catId), eq("user_id", userObjectId))
+                    );
+                    // REDIRECT to prevent duplicate submissions
+                    response.sendRedirect("tracker.jsp");
+                    return;
+                } else {
+                    errorMessage = "Invalid category ID.";
+                }
+            }
+            else if ("setCatLimit".equals(action)) {
+                String catIdStr = request.getParameter("categoryId");
+                String limitStr = request.getParameter("limit");
+                if (isValidObjectId(catIdStr) && isValidString(limitStr)) {
+                    try {
                         ObjectId catId = new ObjectId(catIdStr);
-                        expensesCollection.deleteMany(eq("category_id", catId));
-                        categoriesCollection.deleteOne(
-                            and(eq("_id", catId), eq("user_id", userObjectId))
-                        );
-                        successMessage = "Category deleted successfully!";
-                        response.sendRedirect("tracker.jsp");
-                        return;
-                    } else {
-                        errorMessage = "Invalid category ID.";
-                    }
-                }
-                else if ("setCatLimit".equals(action)) {
-                    String catIdStr = request.getParameter("categoryId");
-                    String limitStr = request.getParameter("limit");
-                    if (isValidObjectId(catIdStr) && isValidString(limitStr)) {
-                        try {
-                            ObjectId catId = new ObjectId(catIdStr);
-                            double limit = parseSafeDouble(limitStr);
-                            categoriesCollection.updateOne(
-                                and(eq("_id", catId), eq("user_id", userObjectId)),
-                                set("limit_amount", limit)
-                            );
-                            successMessage = "Category limit updated successfully!";
-                            response.sendRedirect("tracker.jsp");
-                            return;
-                        } catch (NumberFormatException e) {
-                            errorMessage = "Invalid limit amount. Please enter a valid number.";
-                        }
-                    } else {
-                        errorMessage = "Please enter a valid category limit.";
-                    }
-                }
-                else if ("addExpense".equals(action)) {
-                    String catIdStr = request.getParameter("categoryId");
-                    String amountStr = request.getParameter("amount");
-                    String item = request.getParameter("item");
-                    if (isValidObjectId(catIdStr) && isValidString(amountStr) && isValidString(item)) {
-                        try {
-                            ObjectId catId = new ObjectId(catIdStr);
-                            double amount = parseSafeDouble(amountStr);
-                            Document expense = new Document()
-                                .append("category_id", catId)
-                                .append("amount", amount)
-                                .append("item", item.trim())
-                                .append("spent_at", new java.util.Date())
-                                .append("created_at", new java.util.Date());
-                            expensesCollection.insertOne(expense);
-                            successMessage = "Expense added successfully!";
-                            response.sendRedirect("tracker.jsp");
-                            return;
-                        } catch (NumberFormatException e) {
-                            errorMessage = "Invalid amount format. Please enter a valid number.";
-                        }
-                    } else {
-                        errorMessage = "Please fill in all expense fields.";
-                    }
-                }
-                else if ("deleteExpense".equals(action)) {
-                    String expIdStr = request.getParameter("expenseId");
-                    if (isValidObjectId(expIdStr)) {
-                        ObjectId expId = new ObjectId(expIdStr);
-                        expensesCollection.deleteOne(eq("_id", expId));
-                        successMessage = "Expense deleted successfully!";
-                        response.sendRedirect("tracker.jsp");
-                        return;
-                    } else {
-                        errorMessage = "Invalid expense ID.";
-                    }
-                }
-                else if ("updateCategoryColor".equals(action)) {
-                    String catIdStr = request.getParameter("categoryId");
-                    String newColor = request.getParameter("color");
-                    if (isValidObjectId(catIdStr) && newColor != null && newColor.matches("^#[0-9A-Fa-f]{6}$")) {
-                        ObjectId catId = new ObjectId(catIdStr);
+                        double limit = parseSafeDouble(limitStr);
                         categoriesCollection.updateOne(
                             and(eq("_id", catId), eq("user_id", userObjectId)),
-                            set("color", newColor)
+                            set("limit_amount", limit)
                         );
-                        successMessage = "Category color updated successfully!";
+                        // REDIRECT to prevent duplicate submissions
                         response.sendRedirect("tracker.jsp");
                         return;
-                    } else {
-                        errorMessage = "Please select a valid color.";
+                    } catch (NumberFormatException e) {
+                        errorMessage = "Invalid limit amount. Please enter a valid number.";
                     }
+                } else {
+                    errorMessage = "Please enter a valid category limit.";
                 }
-            } catch (Exception e) {
-                errorMessage = "Database error: " + e.getMessage();
-                out.println("<!-- Form action error: " + e.getMessage() + " -->");
             }
-        } else {
-            errorMessage = "Database not available. Please try again later.";
+            else if ("addExpense".equals(action)) {
+                String catIdStr = request.getParameter("categoryId");
+                String amountStr = request.getParameter("amount");
+                String item = request.getParameter("item");
+                if (isValidObjectId(catIdStr) && isValidString(amountStr) && isValidString(item)) {
+                    try {
+                        ObjectId catId = new ObjectId(catIdStr);
+                        double amount = parseSafeDouble(amountStr);
+                        Document expense = new Document()
+                            .append("category_id", catId)
+                            .append("amount", amount)
+                            .append("item", item.trim())
+                            .append("spent_at", new java.util.Date())
+                            .append("created_at", new java.util.Date());
+                        expensesCollection.insertOne(expense);
+                        // REDIRECT to prevent duplicate submissions
+                        response.sendRedirect("tracker.jsp");
+                        return;
+                    } catch (NumberFormatException e) {
+                        errorMessage = "Invalid amount format. Please enter a valid number.";
+                    }
+                } else {
+                    errorMessage = "Please fill in all expense fields.";
+                }
+            }
+            else if ("deleteExpense".equals(action)) {
+                String expIdStr = request.getParameter("expenseId");
+                if (isValidObjectId(expIdStr)) {
+                    ObjectId expId = new ObjectId(expIdStr);
+                    expensesCollection.deleteOne(eq("_id", expId));
+                    // REDIRECT to prevent duplicate submissions
+                    response.sendRedirect("tracker.jsp");
+                    return;
+                } else {
+                    errorMessage = "Invalid expense ID.";
+                }
+            }
+            else if ("updateCategoryColor".equals(action)) {
+                String catIdStr = request.getParameter("categoryId");
+                String newColor = request.getParameter("color");
+                if (isValidObjectId(catIdStr) && newColor != null && newColor.matches("^#[0-9A-Fa-f]{6}$")) {
+                    ObjectId catId = new ObjectId(catIdStr);
+                    categoriesCollection.updateOne(
+                        and(eq("_id", catId), eq("user_id", userObjectId)),
+                        set("color", newColor)
+                    );
+                    // REDIRECT to prevent duplicate submissions
+                    response.sendRedirect("tracker.jsp");
+                    return;
+                } else {
+                    errorMessage = "Please select a valid color.";
+                }
+            }
+        } catch (Exception e) {
+            errorMessage = "Database error: " + e.getMessage();
+            out.println("<!-- Form action error: " + e.getMessage() + " -->");
         }
+    } else {
+        errorMessage = "Database not available. Please try again later.";
     }
-
+}
     DecimalFormat df = new DecimalFormat("#,##0.00");
     double globalPct = globalLimit > 0 ? (totalExpense / globalLimit) * 100.0 : 0.0;
     SimpleDateFormat dateFormat = new SimpleDateFormat("dd MMM yyyy");
@@ -457,12 +459,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Finance Tracker</title>
+    
+    <link rel="icon" type="image/png" href="icon.png">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        
         :root {
             --primary-color: #38bdf8;
             --secondary-color: #0ea5e9;
@@ -525,8 +534,8 @@
             background: rgba(255,255,255,0.2);
             border: 2px solid rgba(255,255,255,0.3);
             color: white;
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 42px;
             border-radius: 12px;
             display: flex;
             flex-direction: column;
@@ -543,7 +552,7 @@
         }
         
         .hamburger-icon {
-            width: 24px;
+            width: 20px;
             height: 18px;
             position: relative;
             transform: rotate(0deg);
@@ -620,8 +629,8 @@
         }
         
         .sidebar-menu .menu-item:hover {
-            background: var(--primary-color);
-            color: white;
+            background: rgba(0, 0, 0, 0.05);
+            color: #333;
             transform: translateX(5px);
         }
         
@@ -743,30 +752,37 @@
             gap: 1rem;
         }
         
+        /* UPDATED: Full color category tiles */
         .category-tile {
             background: white;
             padding: 1.5rem;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.07);
-            border-left: 4px solid var(--color);
+            background: linear-gradient(135deg, var(--color) 0%, var(--color) 100%);
+            color: white;
             cursor: pointer;
             transition: all 0.2s;
             position: relative;
             font-weight: 600;
-            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             text-align: center;
+            min-height: 100px;
+            border: none;
         }
         
         .category-tile:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+            filter: brightness(1.1);
         }
         
         .delete-category {
             position: absolute;
             top: 0.5rem;
             right: 0.5rem;
-            background: none;
+            background: rgba(255,255,255,0.9);
             border: none;
             color: #dc3545;
             opacity: 0;
@@ -779,6 +795,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            z-index: 10;
         }
         
         .category-tile:hover .delete-category {
@@ -810,10 +827,6 @@
             border-color: var(--accent-color);
             color: var(--accent-color);
             transform: translateY(-2px);
-        }
-        
-        .currency::before {
-            content: "$";
         }
         
         .progress {
@@ -995,17 +1008,10 @@
     <!-- Menu Overlay -->
     <div class="menu-overlay" id="menuOverlay"></div>
 
-    <!-- Alert Messages -->
+    <!-- Alert Messages - ONLY ERRORS -->
     <% if (errorMessage != null) { %>
     <div class="alert alert-danger alert-dismissible fade show mx-3" role="alert">
         <i class="fas fa-exclamation-triangle me-2"></i><%= errorMessage %>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-    <% } %>
-    
-    <% if (successMessage != null) { %>
-    <div class="alert alert-success alert-dismissible fade show mx-3" role="alert">
-        <i class="fas fa-check-circle me-2"></i><%= successMessage %>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     <% } %>
@@ -1017,7 +1023,7 @@
             <div class="metric-card">
                 <div class="metric-icon"><i class="fas fa-money-bill-wave"></i></div>
                 <div class="metric-label">TOTAL INCOME</div>
-                <div class="metric-value"><span class="currency"></span><%= df.format(totalIncome) %></div>
+                <div class="metric-value">&#8377;<%= df.format(totalIncome) %></div>
                 <form method="post" class="mt-3 w-100">
                     <input type="hidden" name="action" value="addIncome"/>
                     <input type="hidden" name="csrfToken" value="<%= csrfToken %>"/>
@@ -1035,7 +1041,7 @@
             <div class="metric-card">
                 <div class="metric-icon"><i class="fas fa-shopping-cart"></i></div>
                 <div class="metric-label">SPENDING</div>
-                <div class="metric-value"><span class="currency"></span><%= df.format(totalExpense) %></div>
+                <div class="metric-value">&#8377;<%= df.format(totalExpense) %></div>
                 <div class="metric-extra">Across all categories</div>
             </div>
 
@@ -1044,7 +1050,7 @@
                 <div class="metric-icon"><i class="fas fa-balance-scale"></i></div>
                 <div class="metric-label">BALANCE</div>
                 <div class="metric-value <%= balance >= 0 ? "text-success" : "text-danger" %>">
-                    <span class="currency"></span><%= df.format(balance) %>
+                    &#8377;<%= df.format(balance) %>
                 </div>
                 <div class="metric-extra"><%= balance >= 0 ? "Under budget" : "Over budget" %></div>
             </div>
@@ -1053,7 +1059,7 @@
             <div class="metric-card">
                 <div class="metric-icon"><i class="fas fa-bullseye"></i></div>
                 <div class="metric-label">GLOBAL LIMIT</div>
-                <div class="metric-value"><span class="currency"></span><%= df.format(globalLimit) %></div>
+                <div class="metric-value">&#8377;<%= df.format(globalLimit) %></div>
                 <form method="post" class="mt-3 w-100">
                     <input type="hidden" name="action" value="setGlobalLimit"/>
                     <input type="hidden" name="csrfToken" value="<%= csrfToken %>"/>
@@ -1091,7 +1097,7 @@
                     double catTotal = category.getDouble("total") != null ? category.getDouble("total") : 0.0;
                     double catPct = catLimit > 0 ? (catTotal / catLimit) * 100.0 : 0.0;
                 %>
-                <div class="category-tile" style="--color: <%= catColor %>; border-left-color: <%= catColor %>;"
+                <div class="category-tile" style="--color: <%= catColor %>;"
                      data-bs-toggle="modal" data-bs-target="#modal_<%= catId %>"
                      aria-label="View <%= catName %> expenses">
                     <%= catName %>
@@ -1125,12 +1131,12 @@
     <div class="modal fade" id="modal_<%= catId %>" tabindex="-1" aria-labelledby="modalLabel_<%= catId %>" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
+                <div class="modal-header" style="background: <%= catColor %>; color: white;">
                     <h5 class="modal-title" id="modalLabel_<%= catId %>">
-                        <i class="fas fa-folder me-2" style="color: <%= catColor %>"></i>
+                        <i class="fas fa-folder me-2"></i>
                         <%= catName %>
                     </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <!-- Category Stats -->
@@ -1139,7 +1145,7 @@
                             <div class="card">
                                 <div class="card-body">
                                     <h6 class="card-title">Spent</h6>
-                                    <h3 class="text-primary">$<%= df.format(catTotal) %></h3>
+                                    <h3 class="text-primary">&#8377;<%= df.format(catTotal) %></h3>
                                 </div>
                             </div>
                         </div>
@@ -1147,7 +1153,7 @@
                             <div class="card">
                                 <div class="card-body">
                                     <h6 class="card-title">Limit</h6>
-                                    <h3 class="text-info">$<%= df.format(catLimit) %></h3>
+                                    <h3 class="text-info">&#8377;<%= df.format(catLimit) %></h3>
                                 </div>
                             </div>
                         </div>
@@ -1267,7 +1273,7 @@
                                     <small class="text-muted"><%= dateFormat.format(spentAt) %></small>
                                 </div>
                                 <div class="d-flex align-items-center">
-                                    <span class="text-danger me-3">$<%= df.format(amount) %></span>
+                                    <span class="text-danger me-3">&#8377;<%= df.format(amount) %></span>
                                     <form method="post" class="d-inline">
                                         <input type="hidden" name="action" value="deleteExpense"/>
                                         <input type="hidden" name="expenseId" value="<%= expense.getObjectId("_id").toString() %>"/>
@@ -1358,44 +1364,31 @@
             sidebarMenu.classList.toggle('open');
             menuOverlay.classList.toggle('active');
             
-            // Prevent body scroll when menu is open
             document.body.style.overflow = sidebarMenu.classList.contains('open') ? 'hidden' : '';
         }
 
-        hamburgerBtn.addEventListener('click', toggleMenu);
-        menuOverlay.addEventListener('click', toggleMenu);
+        if (hamburgerBtn) hamburgerBtn.addEventListener('click', toggleMenu);
+        if (menuOverlay) menuOverlay.addEventListener('click', toggleMenu);
 
-        // Close menu when clicking on menu items
         document.querySelectorAll('.sidebar-menu .menu-item').forEach(item => {
-            item.addEventListener('click', () => {
-                toggleMenu();
-            });
+            item.addEventListener('click', toggleMenu);
         });
 
-        // Category Functions
+        // Category Color Functions
         function toggleColorDropdown(catId) {
             const dropdown = document.getElementById('colorDropdown_' + catId);
-            dropdown.classList.toggle('show');
+            if (dropdown) {
+                dropdown.classList.toggle('show');
+            }
         }
 
         function selectColor(catId, color) {
             const dropdown = document.getElementById('colorDropdown_' + catId);
-            dropdown.classList.remove('show');
-            changeColor(catId, color);
-        }
-
-        // Close color dropdown when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.color-picker-dropdown')) {
-                document.querySelectorAll('.color-dropdown-content').forEach(dropdown => {
-                    dropdown.classList.remove('show');
-                });
+            if (dropdown) {
+                dropdown.classList.remove('show');
             }
-        });
-
-        function changeColor(catId, color) {
-            console.log('Changing color for category', catId, 'to', color);
             
+            // Submit form immediately
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = window.location.href;
@@ -1429,21 +1422,47 @@
             form.submit();
         }
 
+        // Close color dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.color-picker-dropdown')) {
+                document.querySelectorAll('.color-dropdown-content').forEach(dropdown => {
+                    dropdown.classList.remove('show');
+                });
+            }
+        });
+
+        // FIXED: Delete category function
         function showDeleteModal(catId, catName) {
-            document.getElementById('deleteCatName').textContent = catName;
-            document.getElementById('deleteCatId').value = catId;
+            // Close any currently open category modal
+            const openModals = document.querySelectorAll('.modal.show');
+            openModals.forEach(modal => {
+                if (modal.id !== 'deleteCategoryModal') {
+                    const modalInstance = bootstrap.Modal.getInstance(modal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                }
+            });
             
-            const deleteModal = new bootstrap.Modal(document.getElementById('deleteCategoryModal'));
-            deleteModal.show();
+            const deleteCatName = document.getElementById('deleteCatName');
+            const deleteCatId = document.getElementById('deleteCatId');
+            
+            if (deleteCatName && deleteCatId) {
+                deleteCatName.textContent = catName;
+                deleteCatId.value = catId;
+                
+                const deleteModal = new bootstrap.Modal(document.getElementById('deleteCategoryModal'));
+                deleteModal.show();
+            }
         }
 
+        // Menu Functions
         function showColorGuide() {
             alert('Color Guide:\n\n• Green: Good usage (under 80%)\n• Yellow: Warning (80-99%)\n• Red: Over limit (100%+)');
         }
 
         function resetData() {
             if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
-                // Implement reset functionality
                 alert('Reset functionality would be implemented here.');
             }
         }
