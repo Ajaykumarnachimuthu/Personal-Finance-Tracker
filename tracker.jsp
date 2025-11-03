@@ -71,12 +71,47 @@
     MongoCollection<Document> incomesCollection = null;
     MongoCollection<Document> expensesCollection = null;
     
+<<<<<<< HEAD
     try {
         Properties props = new Properties();
         props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
         String connectionString = props.getProperty("mongodb.uri", "mongodb://localhost:27017/finance_tracker");
         
         mongoClient = MongoClients.create(connectionString);
+=======
+    // First, try environment variable (for Render)
+    String envMongoUri = System.getenv("MONGODB_URI");
+    if (envMongoUri != null && !envMongoUri.trim().isEmpty()) {
+        connectionString = envMongoUri;
+        out.println("<!-- Using MONGODB_URI from environment -->");
+    } else {
+    // Fallback to config.properties (for local development)
+        try {
+            Properties props = new Properties();
+            props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
+            connectionString = props.getProperty("mongodb.uri", connectionString);
+            out.println("<!-- Using config.properties -->");
+        } catch (Exception e) {
+            out.println("<!-- Config load error: " + e.getMessage() + " -->");
+            errorMessage = "Configuration error: " + e.getMessage();
+        }
+    }
+
+    try {
+        MongoClientSettings settings = MongoClientSettings.builder()
+            .applyConnectionString(new ConnectionString(connectionString))
+            .applyToSslSettings(builder -> {
+                builder.enabled(true);
+                builder.invalidHostNameAllowed(true);
+            })
+            .applyToSocketSettings(builder -> 
+                builder.connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            )
+            .build();
+            
+        mongoClient = MongoClients.create(settings);
+        mongoClient.listDatabaseNames().first();
+>>>>>>> 8f8a6c067bd5cfd05e2a0a5ddcdcf5a40d49de86
         database = mongoClient.getDatabase("finance_tracker");
         usersCollection = database.getCollection("users");
         incomesCollection = database.getCollection("incomes");
