@@ -1,0 +1,8 @@
+![PREVIEW](images/login.jpg)
+![PREVIEW](images/register.jpg)
+![PREVIEW](images/dashboard.jpg)
+![PREVIEW](images/catagories.jpg)
+![PREVIEW](images/statistics.jpg)
+![PREBIEW](images/recent.jpg)
+![PREVIEW](presentation)
+![PREVIEW](report.pdf)
