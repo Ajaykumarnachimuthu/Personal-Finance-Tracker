@@ -4,5 +4,5 @@
 ![PREVIEW](images/catagories.jpg)
 ![PREVIEW](images/statistics.jpg)
 ![PREBIEW](images/recent.jpg)
-![PREVIEW](presentation)
+![PREVIEW](https://www.canva.com/design/DAG31lzOWok/ZTWPVUrooQN2qPFIqAP8uQ/view?utm_content=DAG31lzOWok&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=haabe31a3a5)
 ![PREVIEW](report.pdf)
