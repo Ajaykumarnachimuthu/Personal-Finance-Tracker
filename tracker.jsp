@@ -64,28 +64,22 @@
     String errorMessage = null;
     String userId = loggedInUserId;
 
-    // MongoDB connection - Using the working pattern from your login.jsp
+    // MongoDB connection - CLEAN VERSION
     MongoClient mongoClient = null;
     MongoDatabase database = null;
     MongoCollection<Document> usersCollection = null;
     MongoCollection<Document> incomesCollection = null;
     MongoCollection<Document> expensesCollection = null;
     
-<<<<<<< HEAD
-    try {
-        Properties props = new Properties();
-        props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
-        String connectionString = props.getProperty("mongodb.uri", "mongodb://localhost:27017/finance_tracker");
-        
-        mongoClient = MongoClients.create(connectionString);
-=======
     // First, try environment variable (for Render)
+    String connectionString;
     String envMongoUri = System.getenv("MONGODB_URI");
     if (envMongoUri != null && !envMongoUri.trim().isEmpty()) {
         connectionString = envMongoUri;
         out.println("<!-- Using MONGODB_URI from environment -->");
     } else {
-    // Fallback to config.properties (for local development)
+        // Fallback to config.properties (for local development)
+        connectionString = "mongodb://localhost:27017/finance_tracker";
         try {
             Properties props = new Properties();
             props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
@@ -98,20 +92,9 @@
     }
 
     try {
-        MongoClientSettings settings = MongoClientSettings.builder()
-            .applyConnectionString(new ConnectionString(connectionString))
-            .applyToSslSettings(builder -> {
-                builder.enabled(true);
-                builder.invalidHostNameAllowed(true);
-            })
-            .applyToSocketSettings(builder -> 
-                builder.connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            )
-            .build();
-            
-        mongoClient = MongoClients.create(settings);
+        // Simple connection - let MongoDB driver handle everything
+        mongoClient = MongoClients.create(connectionString);
         mongoClient.listDatabaseNames().first();
->>>>>>> 8f8a6c067bd5cfd05e2a0a5ddcdcf5a40d49de86
         database = mongoClient.getDatabase("finance_tracker");
         usersCollection = database.getCollection("users");
         incomesCollection = database.getCollection("incomes");
@@ -177,11 +160,23 @@
         // Reconnect for form actions
         MongoClient formMongoClient = null;
         try {
-            Properties props = new Properties();
-            props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
-            String connectionString = props.getProperty("mongodb.uri", "mongodb://localhost:27017/finance_tracker");
+            // Use the same connection logic as above
+            String formConnectionString;
+            String formEnvMongoUri = System.getenv("MONGODB_URI");
+            if (formEnvMongoUri != null && !formEnvMongoUri.trim().isEmpty()) {
+                formConnectionString = formEnvMongoUri;
+            } else {
+                formConnectionString = "mongodb://localhost:27017/finance_tracker";
+                try {
+                    Properties props = new Properties();
+                    props.load(getServletContext().getResourceAsStream("/WEB-INF/config.properties"));
+                    formConnectionString = props.getProperty("mongodb.uri", formConnectionString);
+                } catch (Exception e) {
+                    // Use default local connection
+                }
+            }
             
-            formMongoClient = MongoClients.create(connectionString);
+            formMongoClient = MongoClients.create(formConnectionString);
             MongoDatabase formDatabase = formMongoClient.getDatabase("finance_tracker");
             MongoCollection<Document> formUsersCollection = formDatabase.getCollection("users");
             MongoCollection<Document> formIncomesCollection = formDatabase.getCollection("incomes");

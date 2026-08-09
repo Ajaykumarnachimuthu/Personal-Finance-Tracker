@@ -1,0 +1,5 @@
+# WEB-INF/config.properties.example
+# Copy this file to WEB-INF/config.properties and fill in your MongoDB connection details
+
+# MongoDB Atlas or local connection string
+mongodb.uri=mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority

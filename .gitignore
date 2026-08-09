@@ -1,0 +1,35 @@
+# Sensitive configuration files (contains DB connection string & credentials)
+WEB-INF/config.properties
+
+# Build artifacts & compiled binaries
+*.war
+*.ear
+*.zip
+*.tar.gz
+myapp.war
+target/
+build/
+bin/
+*.class
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.eclipse
+.project
+.classpath
+.settings/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & temporary files
+*.log
+logs/
+temp/
+work/
